@@ -1,0 +1,4 @@
+data/
+# Ignore .DS_Store files everywhere
+# find . -type d -name "__MACOSX" -exec rm -rf {} +
+**/.DS_Store
