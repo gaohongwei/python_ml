@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 
-def build_model(num_channels,num_classes):
+def build_cnn_model(num_channels,num_classes):
     # TODO: get hyperparams and feed into SimpleCNN/nn.Module
     return SimpleCNN(num_channels,num_classes)
+
 
 class SimpleCNN(nn.Module):
     def __init__(self, num_channels, num_classes):
