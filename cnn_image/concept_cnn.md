@@ -1,3 +1,19 @@
+# ToDo
+
+## what is
+
+- popular image pre-trained model
+- imagenet
+- unsqueeze, squeeze
+- save model, or save state_dict(weight only)
+- save as ph5
+
+```
+torch.save(model.state_dict(), 'model_weights.pth')
+
+
+```
+
 1. 超参数调优 (Hyperparameter Tuning)
    超参数调优是机器学习中非常重要的一个步骤。它通过不断调整模型的超参数（例如学习率、dropout 率等），来寻找最适合当前问题的模型配置。超参数调优的目标是提高模型的性能。
 

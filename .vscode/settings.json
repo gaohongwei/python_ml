@@ -1,0 +1,8 @@
+{
+  "python.autoComplete.extraPaths": [
+    "./cnn_image" // This tells VSCode to treat the current folder (cnn_image) as the root
+  ],
+  "editor.quickSuggestions": {
+    "other": "off"
+  }
+}

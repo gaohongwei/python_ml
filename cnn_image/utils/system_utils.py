@@ -3,7 +3,38 @@ import psutil
 import platform
 import resource
 import socket
+from sys import getsizeof
 
+def get_model_size_gb(model):
+    return getsizeof(model) / (1024 )
+
+
+def get_memory_usage(device='cpu'):
+    """
+    Function to get the memory usage of the given device.
+    It works for both CPU and GPU (using CUDA).
+    
+    Parameters:
+        device (str): Either 'cpu' or 'cuda' for GPU.
+        
+    Returns:
+        memory_usage (str): Memory usage in a readable format.
+    """
+
+
+    
+    if device == 'cuda':
+        import torch
+        # Track memory usage for GPU
+        memory_allocated = torch.cuda.memory_allocated() / (1024 ** 2)  # Memory in MB
+        memory_cached = torch.cuda.memory_reserved() / (1024 ** 2)  # Memory in MB
+        return f"Memory Allocated (GPU): {memory_allocated:.2f} MB, Memory Cached (GPU): {memory_cached:.2f} MB"
+    
+    # Track memory usage for CPU
+    import psutil
+    process = psutil.Process(os.getpid())
+    memory_usage = process.memory_info().rss / (1024 ** 2)  # Memory usage in MB
+    return f"Memory Usage (CPU): {memory_usage:.2f} MB"
 
 def get_system_and_usage_data():
     # 获取当前进程的资源使用情况, usage.ru_maxrss, not correct
@@ -42,16 +73,16 @@ def get_system_and_usage_data():
     bytes_recv_mb = round(net_io.bytes_recv / (1024**2), 2)
 
     # 获取操作系统信息
-    system_info = {
-        "system": platform.system(),
-        "node_name": platform.node(),
-        "release": platform.release(),
-        "version": platform.version(),
-        "machine": platform.machine(),
-        "processor": platform.processor(),
-        "hostname": socket.gethostname(),
-        "ip_address": socket.gethostbyname(socket.gethostname()),
-    }
+    # system_info = {
+    #     "system": platform.system(),
+    #     "node_name": platform.node(),
+    #     "release": platform.release(),
+    #     "version": platform.version(),
+    #     "machine": platform.machine(),
+    #     "processor": platform.processor(),
+    #     "hostname": socket.gethostname(),
+    #     "ip_address": socket.gethostbyname(socket.gethostname()),
+    # }
 
     # 组装系统信息
     system_data = {
@@ -76,5 +107,5 @@ def get_system_and_usage_data():
     return {
         "current_usage": current_usage,
         "system_data": system_data,
-        "system_info": system_info,
+        # "system_info": system_info,
     }

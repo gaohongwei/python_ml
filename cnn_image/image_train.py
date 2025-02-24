@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from utils.system_utils import get_system_and_usage_data
+from utils.system_utils import get_system_and_usage_data,get_model_size_gb,get_memory_usage
 
 import logging
 logger = logging.getLogger(__name__)
@@ -33,7 +33,10 @@ def train_loop(model, device, train_loader, max_epochs):
             running_loss += loss.item()
 
             system_data=get_system_and_usage_data()
-            memory_usage_gb=system_data.get('current_usage').get('memory_usage_gb')        
+            memory_usage_gb=system_data.get('current_usage').get('memory_usage_gb') 
+            model_size = get_memory_usage()  
+            print(model_size)
+   
             logger.info(
                 f"epoch={epoch}, batches={batch_count}, image_count={image_count}, memory_usage_gb={memory_usage_gb},running_loss={running_loss}"
             )

@@ -3,3 +3,5 @@ data/
 # find . -type d -name "__MACOSX" -exec rm -rf {} +
 **/.DS_Store
 **/__pycache__
+**/*.pth
+**/*.pdf

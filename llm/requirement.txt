@@ -1,0 +1,8 @@
+PyMuPDF
+pyttsx3
+scikit-learn==1.4.2
+datasets==2.18.0 # =>huggingface_hub.list_datasets
+transformers # =>huggingface
+sentence_transformers
+torch
+accelerate
