@@ -6,3 +6,5 @@ transformers # =>huggingface
 sentence_transformers
 torch
 accelerate
+peft # Parameter-Efficient Fine-Tuning
+bitsandbytes #
