@@ -1,11 +1,14 @@
-### transformers,Hugging Face
+# LLM concepts
+
+## transformers,Hugging Face
 
 - Python 库（toolkit / framework）
-- AutoModel, AutoTokenizer 统一加载模型和 tokenizer 的接
+- AutoModel, AutoTokenizer 统一加载模型和 tokenizer
 - Trainer 模型训练框架，类似 sklearn 的 .fit()
 - datasets 配套的训练/测试数据加载工具（需 datasets 库）
 - pipeline 开箱即用的推理封装，适合快速测试任务
-- Common usage:
+
+## sample code
 
 ```
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
@@ -44,32 +47,28 @@ pipe = pipeline(
 
 ```
 
-### datasets,Hugging Face
+## Chapter 2. Tokens and Embeddings
 
-- list_datasets
-  > > > from datasets import list_datasets
-  > > > all_datasets = list_datasets()
-  > > > <stdin>:1: FutureWarning: list_datasets is deprecated and will be removed in the next major version of datasets. Use 'huggingface_hub.list_datasets' instead.
+### workflow
 
-from transformer import
-AutoModelForCausalLLM,
-AutoTokenizer,
-pipeline
+text -> token_ids->LLM->token_ids->text
 
-model = AutoModelForCausalLLM.from_pretrained()
-tokenizer = AutoTokenizer.from_pretrained()
+### tokens
 
-tokenizer = AutoTokenizer.from_pretrained("microsoft/Phi-3-mini-4k-instruct")
-prompt = "Write an email apologizing to Sarah for the tragic gardening mishap. Explain how it happened.<|assistant|>"
+    每个 token ID 是一个唯一的编号，对应某一个token。
+    这个 token 可以是：一个字符、一个单词，或者一个词的一部分（比如词根、前缀、后缀）。
+    这些 ID 指向 tokenizer 内部的一张词表（vocabulary），这张词表记录了所有它“认识”的 token。
 
-input_ids = tokenizer(prompt,return_tensors="pt").input_ids.to("cpu")
+### 决定 Tokenizer 分词方式的三大关键因素
 
-generation_output = model.generate(
-input_ids=input_ids,
-max_new_tokens=20
-)
+- 选择分词算法（模型设计阶段）
+  - BPE（Byte Pair Encoding，字节对编码）
+  - WordPiece
+  - BERT, 基于 Transformer 编码器架构 的语言理解模型,Bidirectional,同时向左右看
+- 分词器设计细节
+- 训练语料的影响
 
-## concept
+### attention_mask
 
 ### attention_mask 是用于指示模型在计算自注意力时，哪些位置需要被关注（即哪些 token 是有效的，哪些应该被忽略）的一种标记。在很多 NLP 模型中，尤其是在 Transformer 架构中，attention mask 是一个非常重要的概念。
 
@@ -82,3 +81,47 @@ attention_mask 是一个与 input_ids 长度相同的二值序列（通常是一
 
 为什么需要 attention_mask？
 在处理变长文本时，通常我们会对较短的文本进行 填充，使其长度与最长的文本相同。填充的部分并没有实际的语义内容，但在计算自注意力（self-attention）时，模型应该忽略这些填充部分的影响。attention_mask 就是用来标记这些填充位置的。
+
+### Token Embeddings
+
+### Text Embeddings
+
+## Chapter 3. Looking Inside Large Language Models
+
+### Sample code
+
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+### 小型中文模型
+
+```
+model_name = "Qwen/Qwen1.5-0.5B"
+model = AutoModelForCausalLM.from_pretrained(model_name,
+    device_map="cpu",# auto
+    torch_dtype="auto",
+    trust_remote_code=True,
+)
+
+# Create a pipeline
+
+generator = pipeline(
+    "text-generation",
+    model=model,
+    tokenizer=tokenizer,
+    return_full_text= False ,
+    max_new_tokens=50,
+    do_sample= False,
+)
+```
+
+The model does not generate the text all in one operation;
+it actually generates one token at a time.
+Each token generation step is one forward pass through the model
+After each token generation, we tweak the input prompt for the next generation step by appending the output token to the end of the input prompt.
+Software around the neural network basically runs it in a loop to sequentially expand the generated text until completion.
+
+#### The Components of the Forward Pass
+
+In addition to the loop, two key internal components are the tokenizer and the language modeling head (LM head).
+
+## Chapter 12. Fine-Tuning Generation Models
