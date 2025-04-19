@@ -1,0 +1,53 @@
+Wrong:
+  from sklearn.datasets import load_iris
+  iris = load_iris()
+  X = iris.data        
+  y = iris.target
+  from sklearn.neighbors import KNeighborsClassifier        
+  model = KNeighborsClassifier(n_neighbors=1)
+  model.fit(X, y)        
+  y_model = model.predict(X)
+  from sklearn.metrics import accuracy_score        
+  accuracy_score(y, y_model)
+Holdout sets
+  from sklearn.cross_validation import train_test_split
+  # split the data with 50% in each set
+  X1, X2, y1, y2 = train_test_split(X, y, random_state=0, train_size=0.5)
+  # fit the model on one set of data        
+  model.fit(X1, y1)
+  # evaluate the model on the second set of data
+  y2_model = model.predict(X2)        
+  accuracy_score(y2, y2_model)
+  Out[5]: 0.90666666666666662
+Reuse:
+  y2_model = model.fit(X1, y1).predict(X2)        
+  y1_model = model.fit(X2, y2).predict(X1)
+  accuracy_score(y1, y1_model), accuracy_score(y2, y2_model)
+  Out[6]: (0.95999999999999996, 0.90666666666666662)
+Cross-validation:
+def select_model():
+  from sklearn import svm
+  model = svm.SVC(kernel='linear', C=1)
+
+def cv_validate_predict():
+  import numpy as np
+  from sklearn.model_selection import train_test_split
+  from sklearn import datasets
+
+  iris = datasets.load_iris()
+  iris.data.shape, iris.target.shape
+
+
+  from sklearn.model_selection import cross_val_score
+  from sklearn.model_selection import cross_validate
+  scores = cross_validate(model, iris.data, iris.target,
+                          cv=5, return_train_score=True)
+
+  sorted(scores.keys())                 
+                        
+  from sklearn.model_selection import cross_val_predict
+  predicted = cross_val_predict(model, iris.data, iris.target, cv=10)
+
+
+  from sklearn import metrics
+  metrics.accuracy_score(iris.target, predicted) 
