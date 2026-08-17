@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from utils.system_utils import get_system_and_usage_data,get_model_size_gb,get_memory_usage
+from utils.system_utils import get_system_and_usage_data,get_model_size_gb
 
 import logging
 logger = logging.getLogger(__name__)
@@ -18,13 +18,12 @@ def train_loop(model, device, train_loader, max_epochs):
         batch_count = 0
         image_count = 0
 
-        optimizer.zero_grad()
         for inputs, labels in train_loader:
             batch_count += 1
             inputs, labels = inputs.to(device), labels.to(device)
             image_count += inputs.size(0)
 
-            # optimizer.zero_grad()
+            optimizer.zero_grad()
             outputs = model(inputs)
             loss = compute_loss(outputs, labels)
             loss.backward()
@@ -32,14 +31,13 @@ def train_loop(model, device, train_loader, max_epochs):
 
             running_loss += loss.item()
 
-            system_data=get_system_and_usage_data()
-            memory_usage_gb=system_data.get('current_usage').get('memory_usage_gb') 
-            model_size = get_memory_usage()  
-            print(model_size)
-   
-            logger.info(
-                f"epoch={epoch}, batches={batch_count}, image_count={image_count}, memory_usage_gb={memory_usage_gb},running_loss={running_loss}"
-            )
+            # 每 100 个 batch 采样一次，避免拖慢训练和刷日志
+            if batch_count % 100 == 0:
+                system_data=get_system_and_usage_data()
+                memory_usage_gb=system_data.get('current_usage').get('memory_usage_gb')
+                logger.info(
+                    f"epoch={epoch}, batches={batch_count}, image_count={image_count}, memory_usage_gb={memory_usage_gb},running_loss={running_loss}"
+                )
             
             
 def evaluate_model(model, test_loader, device):
@@ -59,6 +57,7 @@ def evaluate_model(model, test_loader, device):
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-    # 
+    if total == 0:
+        return 0.0
     accuracy = 100 * correct / total
     return accuracy
