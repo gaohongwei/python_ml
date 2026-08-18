@@ -1,4 +1,10 @@
-"""Generate synthetic per-feature CSVs so the pipeline can be run immediately.
+"""The sample-data CLI: make fake vehicle data, to run the tool before real logs exist.
+
+Entry point is `run_sample_data(argv)`, which run_sample_data.py at the root calls.
+
+It writes the same files a real recording would: one CSV per signal (speed,
+throttle, coolant temperature), each with its own sampling rate. Nothing here is
+measured - it is generated from a formula, which is the point:
 
 The relation is deliberately known:
 
@@ -11,7 +17,8 @@ wrong - not that the model is too small.
 The three files are written at *different* sampling rates on purpose, which is
 what `--resample` in the train command exists for.
 
-    python run.py sample-data --out-dir sample_data
+    python run_sample_data.py
+    python run_sample_data.py --data-dir sample_data --combined-out combined.csv
 """
 
 import argparse
@@ -19,6 +26,13 @@ from pathlib import Path
 from typing import List, Sequence
 
 import numpy as np
+
+from data_pipeline.combined_frame import (
+    combine_frames,
+    read_frame_from_file,
+    write_combined_csv,
+)
+from train_config import DEFAULT_DATA_DIR
 
 # ─── generator settings ───
 BASE_HZ = 20  # clock of the underlying simulation
@@ -133,19 +147,44 @@ def print_written_files(paths: Sequence[Path]) -> None:
 
 def parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="run.py sample-data",
-        description="Write synthetic feature CSVs.",
+        prog="run_sample_data.py",
+        description="Write fake vehicle signal CSVs with a known, learnable relation.",
     )
-    parser.add_argument("--out-dir", default="sample_data")
+    # --data-dir means the same thing in all three commands: the folder the data
+    # lives in. --out-dir stays as an alias, it is what this command used to take.
+    parser.add_argument(
+        "--data-dir",
+        "--out-dir",
+        dest="data_dir",
+        default=DEFAULT_DATA_DIR,
+        help="folder to write the per-feature CSVs into",
+    )
+    parser.add_argument(
+        "--combined-out",
+        help="also write one wide csv here, to pass to `train --combined-csv`",
+    )
     parser.add_argument("--num-steps", type=int, default=DEFAULT_NUM_STEPS)
     parser.add_argument("--seed", type=int, default=7)
     return parser.parse_args(argv)
 
 
-def main(argv=None) -> int:
+def write_combined_sample(paths: Sequence[Path], combined_out: str) -> Path:
+    """Join the per-feature files into one wide csv, to exercise that input shape.
+
+    Cells stay empty where a slower signal had no sample at that timestamp: the
+    combined layout does not hide the different rates, `--resample` handles them.
+    """
+    combined = combine_frames([read_frame_from_file(path) for path in paths])
+    return write_combined_csv(combined, combined_out)
+
+
+def run_sample_data(argv=None) -> int:
+    """Parse argv, write the fake data files; returns a process exit code."""
     args = parse_args(argv)
-    paths = generate_sample_files(args.out_dir, args.num_steps, args.seed)
+    paths = generate_sample_files(args.data_dir, args.num_steps, args.seed)
     print_written_files(paths)
+    if args.combined_out:
+        print(f"{write_combined_sample(paths, args.combined_out)}  (combined, all features)")
     print(
         f"\nknown relation: speed[t] = {SPEED_MEMORY} * speed[t-1] + "
         f"{THROTTLE_GAIN} * throttle[t-{LAG_STEPS}]"

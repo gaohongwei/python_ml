@@ -1,0 +1,52 @@
+# One training run, written down. An example to copy, not a file that is read
+# on its own - nothing loads it unless you name it:
+#
+#     python run_train.py --config example_train_config.yaml
+#     cp example_train_config.yaml my_run.yaml   # then edit and use that
+#
+# Every key is a field of TcnTrainConfig in train_config.py; anything left out
+# keeps its default from there, and a misspelled key is an error, not a shrug.
+# A .json file with the same keys works too.
+#
+# Prediction takes no config file: it reads the model file plus data, and every
+# preprocessing choice below is already stored inside that model file.
+
+# ─── what to train on ───
+data_dir: sample_data       # folder of log files; file name = signal name
+file_type: csv              # which files inside that folder to read
+target_feature: speed       # the signal to forecast
+# combined_csv: drive.csv   # use instead of data_dir for one wide file
+# csv_paths: [a.csv, b.csv] # or an explicit file list
+
+# ─── how to line the signals up ───
+resample_rule: 100ms        # one row per 100 ms; null keeps the raw timestamps
+fill_method: ffill          # ffill | interpolate | none - forward in time only
+include_target_as_channel: true   # let the model see the target's own history
+
+# ─── what the model looks at and predicts ───
+seq_len: 64                 # past steps per window (6.4 s at 100 ms)
+horizon: 5                  # steps to forecast ahead (0.5 s at 100 ms)
+stride: 1                   # gap between window starts
+
+# ─── how the recording is split, oldest rows first ───
+val_ratio: 0.15             # tune / early-stop on this
+tst_ratio: 0.15             # scored once, never trained on
+
+# ─── model size ───
+num_levels: 5
+num_hidden_channels: 32
+kernel_size: 3
+dropout: 0.1
+
+# ─── training ───
+loss_fn: mse                # mse | mae | huber - see the README
+huber_delta: 1.0            # only used when loss_fn is huber
+max_epochs: 40
+batch_size: 64
+learning_rate: 0.001
+early_stop_patience: 8
+random_seed: 42
+
+# ─── where results go ───
+out_dir: artifacts
+device: auto                # auto | cpu | cuda | mps

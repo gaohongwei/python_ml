@@ -12,8 +12,9 @@ import numpy as np
 import pandas as pd
 import torch
 
-from data_pipeline.csv_feature_loader import DataLoadingError, load_feature_frame
-from tcn_model.model_artifact import TLoadedModel
+from data_pipeline.combined_frame import load_any_feature_frame
+from data_pipeline.csv_feature_loader import DataLoadingError
+from tcn_model import TLoadedModel
 from data_pipeline.window_dataset import (
     build_window_batch,
     get_inference_window_starts,
@@ -27,12 +28,26 @@ DEFAULT_INFERENCE_BATCH_SIZE = 256
 
 
 def load_frame_for_model(
-    loaded: TLoadedModel, csv_paths: Sequence[str], min_rows: Optional[int] = None
+    loaded: TLoadedModel,
+    csv_paths: Sequence[str] = (),
+    frame: Optional[pd.DataFrame] = None,
+    combined_csv: Optional[str] = None,
+    data_dir: Optional[str] = None,
+    file_type: str = "csv",
+    min_rows: Optional[int] = None,
 ) -> pd.DataFrame:
-    """Read new CSVs with the settings stored in the artifact."""
+    """Read new data with the preprocessing settings stored in the artifact.
+
+    The source shape is free - a combined DataFrame, a combined CSV, a directory
+    or a file list - because only the preprocessing has to match training.
+    """
     preprocess = loaded.preprocess
-    return load_feature_frame(
+    return load_any_feature_frame(
+        frame=frame,
+        combined_csv=combined_csv,
+        data_dir=data_dir,
         csv_paths=csv_paths,
+        file_type=file_type,
         time_col=preprocess.get("time_col", "timestamp"),
         value_col=preprocess.get("value_col", "value"),
         resample_rule=preprocess.get("resample_rule"),
@@ -105,14 +120,17 @@ def build_prediction_frame(
     return result
 
 
-def predict_from_csv_files(
+def predict_from_prepared_frame(
     loaded: TLoadedModel,
-    csv_paths: Sequence[str],
+    frame: pd.DataFrame,
     stride: int = 1,
     device: Optional[torch.device] = None,
 ) -> pd.DataFrame:
-    """CSV files in, prediction table out - the whole inference path."""
-    frame = load_frame_for_model(loaded, csv_paths)
+    """Prepared table in, prediction table out - the core of every predict path.
+
+    `frame` must already be aligned / resampled / filled, i.e. it comes out of
+    `load_frame_for_model`. Use `predict_from_source` for a raw DataFrame.
+    """
     x_scaled = prepare_input_array(loaded, frame)
     start_indices = get_inference_window_starts(
         num_rows=x_scaled.shape[0], seq_len=loaded.spec.seq_len, stride=stride
@@ -122,14 +140,75 @@ def predict_from_csv_files(
     return build_prediction_frame(frame, start_indices, predictions, loaded)
 
 
+def predict_latest_from_prepared_frame(
+    loaded: TLoadedModel,
+    frame: pd.DataFrame,
+    device: Optional[torch.device] = None,
+) -> np.ndarray:
+    """Forecast from the most recent `seq_len` rows of a prepared table."""
+    x_scaled = prepare_input_array(loaded, frame)
+    last_start = x_scaled.shape[0] - loaded.spec.seq_len
+    predictions = predict_windows(loaded, x_scaled, [last_start], device)
+    return predictions[0]
+
+
+def predict_from_source(
+    loaded: TLoadedModel,
+    frame: Optional[pd.DataFrame] = None,
+    combined_csv: Optional[str] = None,
+    data_dir: Optional[str] = None,
+    csv_paths: Sequence[str] = (),
+    file_type: str = "csv",
+    stride: int = 1,
+    latest: bool = False,
+    device: Optional[torch.device] = None,
+):
+    """Any source in, forecast out; `latest=True` returns only (horizon,) values.
+
+    Source precedence is the same as training's, since both go through
+    `load_any_feature_frame`.
+    """
+    prepared = load_frame_for_model(
+        loaded,
+        csv_paths=csv_paths,
+        frame=frame,
+        combined_csv=combined_csv,
+        data_dir=data_dir,
+        file_type=file_type,
+    )
+    if latest:
+        return predict_latest_from_prepared_frame(loaded, prepared, device)
+    return predict_from_prepared_frame(loaded, prepared, stride, device)
+
+
+def predict_from_frame(
+    loaded: TLoadedModel,
+    frame: pd.DataFrame,
+    stride: int = 1,
+    device: Optional[torch.device] = None,
+) -> pd.DataFrame:
+    """Combined DataFrame in, prediction table out (preprocessing runs here)."""
+    return predict_from_source(loaded, frame=frame, stride=stride, device=device)
+
+
+def predict_from_csv_files(
+    loaded: TLoadedModel,
+    csv_paths: Sequence[str],
+    stride: int = 1,
+    device: Optional[torch.device] = None,
+) -> pd.DataFrame:
+    """Per-feature CSV files in, prediction table out."""
+    return predict_from_source(
+        loaded, csv_paths=csv_paths, stride=stride, device=device
+    )
+
+
 def predict_latest(
     loaded: TLoadedModel,
     csv_paths: Sequence[str],
     device: Optional[torch.device] = None,
 ) -> np.ndarray:
     """Forecast from the most recent `seq_len` rows only: shape (horizon,)."""
-    frame = load_frame_for_model(loaded, csv_paths)
-    x_scaled = prepare_input_array(loaded, frame)
-    last_start = x_scaled.shape[0] - loaded.spec.seq_len
-    predictions = predict_windows(loaded, x_scaled, [last_start], device)
-    return predictions[0]
+    return predict_from_source(
+        loaded, csv_paths=csv_paths, latest=True, device=device
+    )
