@@ -14,7 +14,12 @@ from typing import List, Optional, Sequence
 import numpy as np
 import pandas as pd
 
-from train_config import DEFAULT_FILL_METHOD, DEFAULT_TIME_COL, DEFAULT_VALUE_COL
+from train_config import (
+    DEFAULT_FILL_METHOD,
+    DEFAULT_TIME_COL,
+    DEFAULT_VALUE_COL,
+    SUPPORTED_FILE_TYPES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,15 +36,29 @@ class DataLoadingError(Exception):
     """Raised when the CSV files cannot be turned into a usable dataset."""
 
 
-def list_csv_files(data_dir: str) -> List[Path]:
-    """Every *.csv in a directory, sorted by name for reproducible column order."""
+def list_data_files(data_dir: str, file_type: str = "csv") -> List[Path]:
+    """Every *.<file_type> in a directory, sorted by name for stable column order.
+
+    `file_type` exists so the combined-frame tool can grow other formats later;
+    today only "csv" is supported and anything else fails loudly.
+    """
+    normalized = file_type.lower().lstrip(".")
+    if normalized not in SUPPORTED_FILE_TYPES:
+        raise DataLoadingError(
+            f"file_type={file_type!r} not supported, expected one of {SUPPORTED_FILE_TYPES}"
+        )
     directory = Path(data_dir)
     if not directory.is_dir():
         raise DataLoadingError(f"not a directory: {data_dir}")
-    csv_files = sorted(directory.glob("*.csv"))
-    if not csv_files:
-        raise DataLoadingError(f"no *.csv found in {data_dir}")
-    return csv_files
+    files = sorted(directory.glob(f"*.{normalized}"))
+    if not files:
+        raise DataLoadingError(f"no *.{normalized} found in {data_dir}")
+    return files
+
+
+def list_csv_files(data_dir: str) -> List[Path]:
+    """Every *.csv in a directory, sorted by name for reproducible column order."""
+    return list_data_files(data_dir, "csv")
 
 
 def get_feature_name(csv_path: Path) -> str:
@@ -107,16 +126,19 @@ def drop_duplicate_timestamps(series: pd.Series) -> pd.Series:
     return series
 
 
-def read_feature_csv(
+def build_feature_series(
+    raw_frame: pd.DataFrame,
     csv_path: Path,
     time_col: str = DEFAULT_TIME_COL,
     value_col: str = DEFAULT_VALUE_COL,
 ) -> pd.Series:
-    """Read one feature file into a time-indexed float Series named after the file."""
-    csv_path = Path(csv_path)
-    raw_frame = pd.read_csv(csv_path)
-    two_cols = resolve_time_and_value_cols(raw_frame, time_col, value_col, csv_path)
+    """Turn an already-read `timestamp,value` frame into a time-indexed Series.
 
+    Split out of `read_feature_csv` so the combined-frame tool can inspect a file
+    once and then reuse this without reading it a second time.
+    """
+    csv_path = Path(csv_path)
+    two_cols = resolve_time_and_value_cols(raw_frame, time_col, value_col, csv_path)
     series = pd.Series(
         pd.to_numeric(two_cols[value_col], errors="coerce").to_numpy(dtype=np.float64),
         index=parse_time_values(two_cols[time_col]),
@@ -128,6 +150,16 @@ def read_feature_csv(
         f"{series.index.min()} .. {series.index.max()}"
     )
     return series
+
+
+def read_feature_csv(
+    csv_path: Path,
+    time_col: str = DEFAULT_TIME_COL,
+    value_col: str = DEFAULT_VALUE_COL,
+) -> pd.Series:
+    """Read one feature file into a time-indexed float Series named after the file."""
+    csv_path = Path(csv_path)
+    return build_feature_series(pd.read_csv(csv_path), csv_path, time_col, value_col)
 
 
 def read_all_feature_csvs(
@@ -208,6 +240,25 @@ def check_frame_is_usable(frame: pd.DataFrame, min_rows: int) -> None:
         )
 
 
+def prepare_feature_frame(
+    frame: pd.DataFrame,
+    resample_rule: Optional[str] = None,
+    fill_method: str = DEFAULT_FILL_METHOD,
+    min_rows: int = 1,
+) -> pd.DataFrame:
+    """resample -> fill -> drop incomplete -> check, on an already-merged table.
+
+    Every data source (many CSVs, one combined CSV, an in-memory DataFrame) ends
+    here, so the table the model sees is prepared exactly one way.
+    """
+    frame = resample_frame(frame, resample_rule)
+    frame = fill_missing_values(frame, fill_method)
+    frame = drop_incomplete_rows(frame)
+    check_frame_is_usable(frame, min_rows)
+    logger.info(f"feature frame ready: {frame.shape[0]} rows x {frame.shape[1]} features")
+    return frame
+
+
 def load_feature_frame(
     csv_paths: Sequence[Path],
     time_col: str = DEFAULT_TIME_COL,
@@ -223,12 +274,7 @@ def load_feature_frame(
     """
     series_list = read_all_feature_csvs(csv_paths, time_col, value_col)
     frame = merge_feature_series(series_list)
-    frame = resample_frame(frame, resample_rule)
-    frame = fill_missing_values(frame, fill_method)
-    frame = drop_incomplete_rows(frame)
-    check_frame_is_usable(frame, min_rows)
-    logger.info(f"feature frame ready: {frame.shape[0]} rows x {frame.shape[1]} features")
-    return frame
+    return prepare_feature_frame(frame, resample_rule, fill_method, min_rows)
 
 
 def select_channel_cols(

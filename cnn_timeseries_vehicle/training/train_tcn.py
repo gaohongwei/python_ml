@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 
 from training.metric_scores import calculate_regression_scores, format_scores
 from data_pipeline.window_dataset import TDataBundle, inverse_scale_target
-from tcn_model.tcn_network import TcnNetwork, build_tcn_network, count_parameters
+from tcn_model import TcnModel, build_tcn_model, count_parameters
 from train_config import get_network_arch
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class TEpochRecord:
 class TTrainOutcome:
     """Result of a full training run."""
 
-    model: TcnNetwork
+    model: TcnModel
     arch: Dict
     best_epoch: int
     best_val_loss: float
@@ -49,9 +49,9 @@ class TTrainOutcome:
     history: List[TEpochRecord] = field(default_factory=list)
 
 
-def create_model(config, num_channels: int) -> TcnNetwork:
+def create_model(config, num_channels: int) -> TcnModel:
     """Build the network described by the config. out_dim = horizon steps."""
-    model = build_tcn_network(
+    model = build_tcn_model(
         num_channels=num_channels,
         out_dim=config.horizon,
         arch=get_network_arch(config),
@@ -69,8 +69,20 @@ def create_optimizer(model: nn.Module, config) -> torch.optim.Optimizer:
     )
 
 
-def create_loss_fn() -> nn.Module:
-    """MSE on the scaled target: forecasting is a plain regression problem."""
+def create_loss_fn(config) -> nn.Module:
+    """What one unit of error costs, on the scaled target.
+
+    - mse   : squared error. One 10-off miss costs as much as a hundred 1-off
+              misses, so the fit chases spikes. Default; matches the reported RMSE.
+    - mae   : absolute error. Every unit costs the same, so a few bad sensor
+              samples cannot dominate the fit. Matches the reported MAE.
+    - huber : squared below `huber_delta`, absolute above it - smooth like MSE
+              where the model is already close, robust like MAE where it is not.
+    """
+    if config.loss_fn == "mae":
+        return nn.L1Loss()
+    if config.loss_fn == "huber":
+        return nn.HuberLoss(delta=config.huber_delta)
     return nn.MSELoss()
 
 
@@ -158,7 +170,7 @@ def train_tcn_model(
     """Train until `max_epochs` or until validation stops improving."""
     model = create_model(config, bundle.num_channels).to(device)
     optimizer = create_optimizer(model, config)
-    loss_fn = create_loss_fn()
+    loss_fn = create_loss_fn(config)
 
     best_val_loss = float("inf")
     best_epoch = 0

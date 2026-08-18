@@ -1,1 +1,1 @@
-"""Command implementations behind run.py: argument parsing and orchestration only."""
+"""The CLI layer behind the run_*.py scripts: parsing and orchestration, no logic."""

@@ -17,7 +17,7 @@ from typing import Dict, List, Optional
 
 import torch
 
-from tcn_model.tcn_network import TcnNetwork, build_tcn_network
+from tcn_model.tcn_model import TcnModel, build_tcn_model
 from data_pipeline.window_dataset import TWindowSpec
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ MODEL_TYPE = "tcn"
 class TLoadedModel:
     """A ready-to-use model plus the contracts it was trained under."""
 
-    model: TcnNetwork
+    model: TcnModel
     arch: Dict
     channel_cols: List[str]
     target_feature: str
@@ -57,7 +57,7 @@ def build_preprocess_dict(config) -> Dict:
 
 def save_model_artifact(
     model_path: str,
-    model: TcnNetwork,
+    model: TcnModel,
     arch: Dict,
     channel_cols: List[str],
     target_feature: str,
@@ -104,7 +104,7 @@ def load_model_artifact(model_path: str, device: Optional[torch.device] = None) 
         horizon=payload["horizon"],
         stride=payload.get("stride", 1),
     )
-    model = build_tcn_network(
+    model = build_tcn_model(
         num_channels=len(payload["channel_cols"]),
         out_dim=spec.horizon,
         arch=payload["arch"],
